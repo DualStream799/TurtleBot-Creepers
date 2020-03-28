@@ -4,6 +4,10 @@
 __author__ = "DualStream799"
 
 # Importing Libraries
+
+import sys
+sys.path.insert(0, '/ROS-OpenCV-Pythonlib')
+
 from bot_module import TurtleBot
 
 
@@ -90,7 +94,6 @@ if __name__=="__main__":
 		while not rospy.is_shutdown():
 			vel = Twist(bot.vector_zero, bot.vector_zero)
 			bot.frame_capture('creepers_gazebo', frame_capturado)
-
 			rospy.sleep(0.1)
 
 	except rospy.ROSInterruptException:

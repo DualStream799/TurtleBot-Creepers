@@ -5,10 +5,7 @@ __author__ = "DualStream799"
 
 # Importing Libraries
 
-import sys
-sys.path.insert(0, '/ROS-OpenCV-Pythonlib')
-
-from bot_module import TurtleBot
+from ROS_OpenCV_Pythonlib.bot_module import TurtleBot
 
 
 import rospy

@@ -15,6 +15,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 import cormodule
+from sensor_msgs.msg import LaserScan
 
 
 bridge = CvBridge()
@@ -31,6 +32,18 @@ area = 0.0 # Variavel com a area do maior contorno
 check_delay = False 
 
 # A função a seguir é chamada sempre que chega um novo frame
+dados = None
+
+def scaneou(dado):
+	global dados
+	dados = np.array(dado.ranges).round(decimals=2)
+	print("Faixa valida: ", dado.range_min , " - ", dado.range_max )
+	print("Leituras:")
+	print(np.array(dado.ranges).round(decimals=2))
+
+	#print("Intensities")
+	#print(np.array(dado.intensities).round(decimals=2))
+
 def roda_todo_frame(imagem):
 	print("frame")
 	global cv_image
@@ -81,6 +94,7 @@ if __name__=="__main__":
 	# 
 
 	recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
+	recebe_scan = rospy.Subscriber("/scan", LaserScan, scaneou)
 	print("Usando ", topico_imagem)
 
 	velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 1)
@@ -93,10 +107,16 @@ if __name__=="__main__":
 				print("Média dos vermelhos: {0}, {1}".format(media[0], media[1]))
 				print("Centro dos vermelhos: {0}, {1}".format(centro[0], centro[1]))
 
-				if (media[0] > centro[0]):
-					vel = Twist(Vector3(0,0,0), Vector3(0,0,-0.1))
-				if (media[0] < centro[0]):
-					vel = Twist(Vector3(0,0,0), Vector3(0,0,0.1))
+				
+				w = dados[-1]
+				# distancia de 0.15 muito pequena para o LaserScan. Por isso, colocamos distancia de 0.45.
+				if w >= 0.45:
+					if (media[0] > centro[0]):
+						vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.1))
+					if (media[0] < centro[0]):
+						vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.1))
+				else:
+					vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
 			velocidade_saida.publish(vel)
 			rospy.sleep(0.1)
 

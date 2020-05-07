@@ -1,0 +1,3 @@
+[submodule "scripts/ROS_OpenCV_Pythonlib"]
+	path = scripts/ROS_OpenCV_Pythonlib
+	url = https://github.com/DualStream799/ROS_OpenCV_Pythonlib.git

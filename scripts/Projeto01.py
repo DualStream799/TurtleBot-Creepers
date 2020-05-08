@@ -229,6 +229,9 @@ if __name__=="__main__":
 					bot.angular_z = 0.1
 
 				bot.linear_x = 0.1
+
+			if bot.laser_scan[-1] < 0.45:
+				bot.stop_twist()
 			else:
 				bot.angular_z = 0.1
 				bot.linear_x = 0

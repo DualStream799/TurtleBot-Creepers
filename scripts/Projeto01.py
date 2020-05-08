@@ -144,6 +144,15 @@ def on_frame(image):
 	blue_contours, tree = visor.contour_detection(blue_mask_clean)
 	pink_contours, tree = visor.contour_detection(pink_mask_clean)
 
+	recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
+    recebedor_2 = rospy.Subscriber("/ar_pose_marker", AlvarMarkers, recebe) # Para recebermos notificacoes de que marcadores foram vistos
+    recebe_scan = rospy.Subscriber("/scan", LaserScan, scaneou)
+
+    cap = recebedor
+	dists = recebe_scan
+	creepers = recebedor_2
+
+
 	# Finds the closes creeper selecting the biggest contour between all 3 masks (green, blue and pink):
 	biggest_contours = []
 	if len(green_contours) != 0:

@@ -143,44 +143,66 @@ def on_frame(image):
 	green_contours, tree = visor.contour_detection(green_mask_clean)
 	blue_contours, tree = visor.contour_detection(blue_mask_clean)
 	pink_contours, tree = visor.contour_detection(pink_mask_clean)
-	
-	#green_biggest_contour = visor.contour_biggest_area(green_contours)
-	#blue_biggest_contour = visor.contour_biggest_area(blue_contours)
-	#pink_biggest_contour = visor.contour_biggest_area(pink_contours)
 
 	# Finds the closes creeper selecting the biggest contour between all 3 masks (green, blue and pink):
 	biggest_contours = []
-	for contours in (green_contours, blue_contours, pink_contours):
-		if len(contours) != 0:
-			# Finds the biggest contour:
-			biggest_contour = visor.contour_biggest_area(contours)
-			biggest_contours.append(biggest_contour)
+	if len(green_contours) != 0:
+		# Finds the biggest green contour:
+		green_biggest_contour = visor.contour_biggest_area(green_contours)
+		# Draws the contour:
+		biggest_contours.append(green_biggest_contour)
+
+		#x, y, w, h = 
+		visor.draw_rectangle(bgr_frame, visor.contour_features(green_biggest_contour, 'str-rect'), color=(0,255,0))
+
+	if len(blue_contours) != 0:
+		# Finds the biggest blue contour:
+		blue_biggest_contour = visor.contour_biggest_area(blue_contours)
+		# Draws the contour:
+		biggest_contours.append(blue_biggest_contour)		
+
+		#x, y, w, h = 
+		visor.draw_rectangle(bgr_frame, visor.contour_features(blue_biggest_contour, 'str-rect'), color=(0,255,0))
+
+	if len(pink_contours) != 0:
+		# Finds the biggest pink contour:
+		pink_biggest_contour = visor.contour_biggest_area(pink_contours)
+		# Draws the contour:
+		biggest_contours.append(pink_biggest_contour)
+
+		#x, y, w, h = 
+		visor.draw_rectangle(bgr_frame, visor.contour_features(pink_biggest_contour, 'str-rect'), color=(0,255,0))
+
+	# Draws the yellow contour and the center of it:
+	if len(yellow_contours) != 0:
+		# Finds the biggest contour:
+		yellow_biggest_contour = visor.contour_biggest_area(yellow_contours)
+		# Draws the contour:
+		visor.contour_draw(bgr_frame, yellow_biggest_contour, color=(0, 0, 0))
+		# Draws a aim on the center of the biggest contour:
+		track_contour_point = visor.contour_features(yellow_biggest_contour, 'center')
+
+		x, y, w, h = visor.contour_features(yellow_biggest_contour, 'str-rect')
+		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(0,255,0))
+
+
 	closest_creeper = []
 	if len(biggest_contours) > 1:
 		closest_creeper.append(visor.contour_biggest_area(biggest_contours))
 	elif len(biggest_contours) == 1:
 		closest_creeper.append(biggest_contours[0])
 
-	# Draws the yellow contour and the center of it:
-	if len(yellow_contours) >= 1:
-		# Finds the biggest contour:
-		yellow_biggest_contour = visor.contour_biggest_area(yellow_contours)
-		# Draws the contour:
-		visor.contour_draw(bgr_frame, yellow_biggest_contour, color=[0, 0, 0])
-		# Draws a aim on the center of the biggest contour:
-		#print(yellow_biggest_contour)
-		track_contour_point = visor.contour_features(yellow_biggest_contour, 'center')
-		visor.draw_aim(bgr_frame, track_contour_point, color=[0, 0, 0], length=8)
+
 	# Draws an rectangle around the closest creeper detected:
 	if len(closest_creeper) == 1:
 		x, y, w, h = visor.contour_features(closest_creeper[0], 'str-rect')
 		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(0,255,0))
-	# Display current frame
-	export_frame = bgr_frame 
+	# Display current frame:
+	export_frame = bgr_frame
 
 if __name__=="__main__":
 
-	rospy.init_node("marcador") # Como nosso programa declara  seu nome para o sistema ROS
+	rospy.init_node("marcador")
 
 	#recebedor = rospy.Subscriber("/ar_pose_marker", AlvarMarkers, recebe) # Para recebermos notificacoes de que marcadores foram vistos
 	velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 1) # Para podermos controlar o robo

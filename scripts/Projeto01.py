@@ -15,11 +15,14 @@ import numpy as np
 import math
 from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
 from ar_track_alvar_msgs.msg import AlvarMarker, AlvarMarkers
+from cv_bridge import CvBridge, CvBridgeError
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import Header
 import cv2
 import sys
+import time
+
 # Importing custom libraries:
 from ROS_OpenCV_Pythonlib.bot_module import ControlBotModule, VisionBotModule, SupportBotModule
 
@@ -37,9 +40,9 @@ track_contour_point = None
 screen_point = None
 # Hue value for masks:
 yellow_hue = 60
-green_hue = 126
-blue_hue = 213
-pruple_hue = 293
+green_hue = 123
+blue_hue = 207
+pink_hue = 309
 bot = ControlBotModule()
 visor = VisionBotModule()
 
@@ -86,10 +89,32 @@ def recebe(msg):
 			x_robo = [1,0,0]
 			cosa = numpy.dot(n2, x_robo) # Projecao do vetor normal ao marcador no x do robo
 			angulo_marcador_robo = math.degrees(math.acos(cosa))
-
 			# Terminamos
 			print("id: {} x {} y {} z {} angulo {} ".format(id, x,y,z, angulo_marcador_robo))
 
+
+def check_frame_delay(image):
+	atraso = 1.5E9 # 1 segundo e meio. Em nanossegundos
+
+	now = rospy.get_rostime()
+	imgtime = image.header.stamp
+	lag = now-imgtime # calcula o lag
+	delay = lag.nsecs
+	#print("delay ", "{:.3f}".format(delay/1.0E9))
+	if delay > atraso and check_delay==True:
+		print("Descartando por causa do delay do frame:", delay)
+		return 
+	try:
+		antes = time.clock()
+
+		on_frame(image)
+
+		depois = time.clock()
+
+		return 
+	except CvBridgeError as e:
+		#print('ex', e)
+		pass
 
 def on_frame(image):
 	global export_frame
@@ -105,30 +130,55 @@ def on_frame(image):
 	#yellow_rgb = (239, 239, 0)
 	# Creates masks based on the color:
 	yellow_mask = visor.frame_mask_hsv(hsv_frame, yellow_hue, 10, value_range=(180, 255))
-	green_mask = visor.frame_mask_hsv(hsv_frame, green_hue, 10, [80, 255], [50, 255])
-	blue_mask = visor.frame_mask_hsv(hsv_frame, blue_hue, 10, [80, 255], [50, 255])
-	purple_mask = visor.frame_mask_hsv(hsv_frame, green_hue, 10, [80, 255], [50, 255])
-	# Reduces noise:
+	green_mask = visor.frame_mask_hsv(hsv_frame, green_hue, 10, (80, 255),(50, 255))
+	blue_mask = visor.frame_mask_hsv(hsv_frame, blue_hue, 10, (80, 255), (50, 255))
+	pink_mask = visor.frame_mask_hsv(hsv_frame, pink_hue, 10, (80, 255), (50, 255))
+	# Gets rid of noise:
 	yellow_mask_clean = visor.morphological_transformation(yellow_mask, 'opening', 4)
 	green_mask_clean = visor.morphological_transformation(green_mask, 'opening', 4)
 	blue_mask_clean = visor.morphological_transformation(blue_mask, 'opening', 4)
-	purple_mask_clean = visor.morphological_transformation(purple_mask, 'opening', 4)
-	# Detects yellow contours:
-	contours, tree = visor.contour_detection(yellow_mask)
-	# Finds the biggest contour:
-	biggest_contour = visor.contour_biggest_area(contours)
+	pink_mask_clean = visor.morphological_transformation(pink_mask, 'opening', 4)
+	# Detects contours for each color:
+	yellow_contours, tree = visor.contour_detection(yellow_mask_clean)
+	green_contours, tree = visor.contour_detection(green_mask_clean)
+	blue_contours, tree = visor.contour_detection(blue_mask_clean)
+	pink_contours, tree = visor.contour_detection(pink_mask_clean)
+	
+	#green_biggest_contour = visor.contour_biggest_area(green_contours)
+	#blue_biggest_contour = visor.contour_biggest_area(blue_contours)
+	#pink_biggest_contour = visor.contour_biggest_area(pink_contours)
 
-	if biggest_contour is not None:
+	# Finds the closes creeper selecting the biggest contour between all 3 masks (green, blue and pink):
+	biggest_contours = []
+	for contours in (green_contours, blue_contours, pink_contours):
+		if len(contours) != 0:
+			# Finds the biggest contour:
+			biggest_contour = visor.contour_biggest_area(contours)
+			biggest_contours.append(biggest_contour)
+	closest_creeper = []
+	if len(biggest_contours) > 1:
+		closest_creeper.append(visor.contour_biggest_area(biggest_contours))
+	elif len(biggest_contours) == 1:
+		closest_creeper.append(biggest_contours[0])
+
+	# Draws the yellow contour and the center of it:
+	if len(yellow_contours) >= 1:
+		# Finds the biggest contour:
+		yellow_biggest_contour = visor.contour_biggest_area(yellow_contours)
 		# Draws the contour:
-		visor.contour_draw(bgr_frame, biggest_contour, color=[0,0, 255])
+		visor.contour_draw(bgr_frame, yellow_biggest_contour, color=[0, 0, 0])
 		# Draws a aim on the center of the biggest contour:
-		track_contour_point = visor.contour_features(biggest_contour, 'center')
-		visor.draw_aim(bgr_frame, track_contour_point, color=[255,0,0])
+		#print(yellow_biggest_contour)
+		track_contour_point = visor.contour_features(yellow_biggest_contour, 'center')
+		visor.draw_aim(bgr_frame, track_contour_point, color=[0, 0, 0], length=8)
+	# Draws an rectangle around the closest creeper detected:
+	if len(closest_creeper) == 1:
+		x, y, w, h = visor.contour_features(closest_creeper[0], 'str-rect')
+		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(0,255,0))
 	# Display current frame
-	export_frame = bgr_frame
+	export_frame = bgr_frame 
 
 if __name__=="__main__":
-	print("Coordenadas configuradas para usar robô virtual, para usar webcam USB altere no código fonte a variável frame")
 
 	rospy.init_node("marcador") # Como nosso programa declara  seu nome para o sistema ROS
 
@@ -139,9 +189,9 @@ if __name__=="__main__":
 	tfl = tf2_ros.TransformListener(tf_buffer) # Para fazer conversao de sistemas de coordenadas - usado para calcular angulo
 
 	try:
-		# Loop principal - todo programa ROS deve ter um
+		 #Loop principal - todo programa ROS deve ter um
 		while not rospy.is_shutdown():
-			if track_contour_point is not None and screen_point is not None:
+		 	if track_contour_point is not None and screen_point is not None and export_frame is not None:
 				if (track_contour_point[0] >= screen_point[0]):
 					bot.angular_z = -0.1
 				else:
@@ -161,12 +211,8 @@ if __name__=="__main__":
 			key_input = cv2.waitKey(delay_ms) & 0xFF
 			# Exit the program:
 			if  key_input == ord('q'):
-				bot.linear_x = 0
-				bot.angular_z = 0
-				velocidade_saida.publish(bot.main_twist())
+				velocidade_saida.publish(bot.stop_twist())
 				break
 	except rospy.ROSInterruptException:
 		print("Ocorreu uma exceção com o rospy")
-		#visor.display_terminate()
-
-
+		velocidade_saida.publish(bot.stop_twist())

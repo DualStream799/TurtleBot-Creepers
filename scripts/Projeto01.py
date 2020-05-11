@@ -149,44 +149,54 @@ def on_frame(image):
 	if len(green_contours) != 0:
 		# Finds the biggest green contour:
 		green_biggest_contour = visor.contour_biggest_area(green_contours)
-		# Draws the contour:
-		biggest_contours.append(green_biggest_contour)
-		x, y, w, h = visor.contour_features(green_biggest_contour, 'str-rect')
-		green_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
-		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(13, 253, 0))
-		visor.draw_text(bgr_frame, "Green", green_text_point, thickness=1, font_size=0.5, text_color=(13, 253, 0))
+		# Avoids a noise detection to be categorized as a contour:
+		if visor.contour_features(green_biggest_contour, mode='area') > 100:
+			# Draws the contour:
+			biggest_contours.append(green_biggest_contour)
+			x, y, w, h = visor.contour_features(green_biggest_contour, 'str-rect')
+			green_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
+			visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(13, 253, 0))
+			visor.draw_text(bgr_frame, "Green", green_text_point, thickness=1, font_size=0.5, text_color=(13, 253, 0))
 
 	if len(blue_contours) != 0:
 		# Finds the biggest blue contour:
 		blue_biggest_contour = visor.contour_biggest_area(blue_contours)
-		# Draws the contour:
-		biggest_contours.append(blue_biggest_contour)
-		x, y, w, h = visor.contour_features(blue_biggest_contour, 'str-rect')
-		blue_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
-		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(255, 145, 17))
-		visor.draw_text(bgr_frame, "Blue", blue_text_point, thickness=1, font_size=0.5, text_color=(255, 145, 17))
+		# Avoids a noise detection to be categorized as a contour:
+		if visor.contour_features(blue_biggest_contour, mode='area') > 100:
+			# Draws the contour:
+			biggest_contours.append(blue_biggest_contour)
+			x, y, w, h = visor.contour_features(blue_biggest_contour, 'str-rect')
+			blue_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
+			visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(255, 145, 17))
+			visor.draw_text(bgr_frame, "Blue", blue_text_point, thickness=1, font_size=0.5, text_color=(255, 145, 17))
 
 		
 	if len(pink_contours) != 0:
 		# Finds the biggest pink contour:
 		pink_biggest_contour = visor.contour_biggest_area(pink_contours)
-		# Draws the contour:
-		biggest_contours.append(pink_biggest_contour)
-		x, y, w, h = visor.contour_features(pink_biggest_contour, 'str-rect') 
-		pink_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
-		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(216, 0, 255))
-		visor.draw_text(bgr_frame, "Pink", pink_text_point, thickness=1, font_size=0.5, text_color=(216, 0, 255))
+		# Avoids a noise detection to be categorized as a contour:
+		if visor.contour_features(pink_biggest_contour, mode='area') > 100:
+			# Draws the contour:
+			biggest_contours.append(pink_biggest_contour)
+			x, y, w, h = visor.contour_features(pink_biggest_contour, 'str-rect') 
+			pink_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
+			visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(216, 0, 255))
+			visor.draw_text(bgr_frame, "Pink", pink_text_point, thickness=1, font_size=0.5, text_color=(216, 0, 255))
 
 	# Draws the yellow contour and the center of it:
 	if len(yellow_contours) != 0:
 		# Finds the biggest contour:
 		yellow_biggest_contour = visor.contour_biggest_area(yellow_contours)
-		# Draws the contour:
-		visor.contour_draw(bgr_frame, yellow_biggest_contour, color=(0,0,0))
-		# Draws a aim on the center of the biggest contour:
-		track_contour_point = visor.contour_features(yellow_biggest_contour, 'center')
-
-		visor.draw_aim(rgb_frame, track_contour_point)
+		# Avoids a noise detection to be categorized as a contour:
+		if visor.contour_features(yellow_biggest_contour, mode='area') > 100:
+			track_contour_point = visor.contour_features(yellow_biggest_contour, 'center')
+			# Draws the contour:
+			visor.contour_draw(bgr_frame, yellow_biggest_contour, color=(0,0,0))
+			# Draws a aim on the center of the biggest contour:
+			visor.draw_aim(bgr_frame, track_contour_point)
+			
+		else:
+			track_contour_point = None
 
 	closest_creeper = []
 	if len(biggest_contours) > 1:
@@ -241,7 +251,7 @@ if __name__=="__main__":
 					bot.angular_z = 0.1
 				bot.linear_x = 0.1
 			# 'comeback' status makes the robot align with the initial point:
-			elif status == 'comeback' and (abs(bot.goal_angle) + abs(bot.odom_yaw) - math.pi) > 0.1:
+			elif status == 'comeback' and (bot.goal_angle +bot.odom_yaw - math.pi) > 0.1:
 					bot.linear_x = 0.0
 					bot.angular_z = 0.1
 					print('Aligning with goal: {}'.format(abs(bot.goal_angle - bot.odom_yaw)))

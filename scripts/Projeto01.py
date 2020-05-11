@@ -3,8 +3,6 @@
 __author__ = "DualStream799"
 
 
-
-
 import rospy
 import numpy
 from numpy import linalg
@@ -34,7 +32,9 @@ image = None
 marcadores = []
 angulo_marcador_robo = 0
 
-
+status = 'run'
+diff_pos = []
+diff_ori = []
 export_frame = None
 track_contour_point = None
 screen_point = None
@@ -43,6 +43,7 @@ yellow_hue = 60
 green_hue = 123
 blue_hue = 207
 pink_hue = 309
+
 bot = ControlBotModule()
 visor = VisionBotModule()
 
@@ -127,7 +128,6 @@ def on_frame(image):
 	screen_point = frame.shape
 	# Converts frame to all spacecolors:
 	bgr_frame, gray_frame, rgb_frame, hsv_frame = visor.frame_spacecolors(frame)
-	#yellow_rgb = (239, 239, 0)
 	# Creates masks based on the color:
 	yellow_mask = visor.frame_mask_hsv(hsv_frame, yellow_hue, 10, value_range=(180, 255))
 	green_mask = visor.frame_mask_hsv(hsv_frame, green_hue, 10, (80, 255),(50, 255))
@@ -151,40 +151,42 @@ def on_frame(image):
 		green_biggest_contour = visor.contour_biggest_area(green_contours)
 		# Draws the contour:
 		biggest_contours.append(green_biggest_contour)
-
-		#x, y, w, h = 
-		visor.draw_rectangle(bgr_frame, visor.contour_features(green_biggest_contour, 'str-rect'), color=(0,255,0))
+		x, y, w, h = visor.contour_features(green_biggest_contour, 'str-rect')
+		green_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
+		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(13, 253, 0))
+		visor.draw_text(bgr_frame, "Green", green_text_point, thickness=1, font_size=0.5, text_color=(13, 253, 0))
 
 	if len(blue_contours) != 0:
 		# Finds the biggest blue contour:
 		blue_biggest_contour = visor.contour_biggest_area(blue_contours)
 		# Draws the contour:
-		biggest_contours.append(blue_biggest_contour)		
+		biggest_contours.append(blue_biggest_contour)
+		x, y, w, h = visor.contour_features(blue_biggest_contour, 'str-rect')
+		blue_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
+		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(255, 145, 17))
+		visor.draw_text(bgr_frame, "Blue", blue_text_point, thickness=1, font_size=0.5, text_color=(255, 145, 17))
 
-		#x, y, w, h = 
-		visor.draw_rectangle(bgr_frame, visor.contour_features(blue_biggest_contour, 'str-rect'), color=(0,255,0))
-
+		
 	if len(pink_contours) != 0:
 		# Finds the biggest pink contour:
 		pink_biggest_contour = visor.contour_biggest_area(pink_contours)
 		# Draws the contour:
 		biggest_contours.append(pink_biggest_contour)
-
-		#x, y, w, h = 
-		visor.draw_rectangle(bgr_frame, visor.contour_features(pink_biggest_contour, 'str-rect'), color=(0,255,0))
+		x, y, w, h = visor.contour_features(pink_biggest_contour, 'str-rect') 
+		pink_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
+		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(216, 0, 255))
+		visor.draw_text(bgr_frame, "Pink", pink_text_point, thickness=1, font_size=0.5, text_color=(216, 0, 255))
 
 	# Draws the yellow contour and the center of it:
 	if len(yellow_contours) != 0:
 		# Finds the biggest contour:
 		yellow_biggest_contour = visor.contour_biggest_area(yellow_contours)
 		# Draws the contour:
-		visor.contour_draw(bgr_frame, yellow_biggest_contour, color=(0, 0, 0))
+		visor.contour_draw(bgr_frame, yellow_biggest_contour, color=(0,0,0))
 		# Draws a aim on the center of the biggest contour:
 		track_contour_point = visor.contour_features(yellow_biggest_contour, 'center')
 
-		x, y, w, h = visor.contour_features(yellow_biggest_contour, 'str-rect')
-		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(0,255,0))
-
+		visor.draw_aim(rgb_frame, track_contour_point)
 
 	closest_creeper = []
 	if len(biggest_contours) > 1:
@@ -196,35 +198,88 @@ def on_frame(image):
 	# Draws an rectangle around the closest creeper detected:
 	if len(closest_creeper) == 1:
 		x, y, w, h = visor.contour_features(closest_creeper[0], 'str-rect')
-		visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(0,255,0))
+		closest_text_point = visor.convert_dimensions_to_points((x-5, y-25, w, h))[0]
+		visor.draw_text(bgr_frame, "Closest", closest_text_point, thickness=1, font_size=0.5, text_color=(245, 242, 66))
+
 	# Display current frame:
 	export_frame = bgr_frame
 
+def odometry_position(msg):
+	global status
+
+	pose = msg.pose.pose
+	bot.odom_scan(msg)
+	if status == 'odom_save':
+		bot.set_goal(bot.odom_x, bot.odom_y)
+		print('Odometry saved')
+		status = 'run'
+	elif status == 'comeback':
+		bot.update_goal_state()
+
+first_time = True
+aligned = False
 if __name__=="__main__":
 
 	rospy.init_node("marcador")
+	rate = rospy.Rate(5)
 
 	#recebedor = rospy.Subscriber("/ar_pose_marker", AlvarMarkers, recebe) # Para recebermos notificacoes de que marcadores foram vistos
-	velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 1) # Para podermos controlar o robo
-	robo_camera = rospy.Subscriber("/camera/rgb/image_raw/compressed", CompressedImage, on_frame, queue_size=4, buff_size = 2**24)
+	velocidade_saida = rospy.Publisher('/cmd_vel', Twist, queue_size=1) # Para podermos controlar o robo
+	robo_camera = rospy.Subscriber('/camera/rgb/image_raw/compressed', CompressedImage, on_frame, queue_size=4, buff_size=2**24)
+	obodmetry_sub = rospy.Subscriber('/odom', Odometry, odometry_position)
 
 	tfl = tf2_ros.TransformListener(tf_buffer) # Para fazer conversao de sistemas de coordenadas - usado para calcular angulo
 
 	try:
 		 #Loop principal - todo programa ROS deve ter um
 		while not rospy.is_shutdown():
-		 	if track_contour_point is not None and screen_point is not None and export_frame is not None:
+			# 'run' status keeps the robot on track:
+			if status == 'run' and track_contour_point is not None and screen_point is not None and export_frame is not None:
 				if (track_contour_point[0] >= screen_point[0]):
 					bot.angular_z = -0.1
 				else:
 					bot.angular_z = 0.1
-
 				bot.linear_x = 0.1
+			# 'comeback' status makes the robot align with the initial point:
+			elif status == 'comeback' and abs(bot.goal_angle - bot.odom_yaw) > 0.1:
+					bot.linear_x = 0.0
+					bot.angular_z = 0.1
+					print('Aligning with goal: {}'.format(abs(bot.goal_angle - bot.odom_yaw)))
+
+			elif status == 'comeback' and abs(bot.goal_angle - bot.odom_yaw) <= 0.1:
+				velocidade_saida.publish(bot.stop_twist())
+				rospy.sleep(3)
+				print("Aligned")
+				status = 'aligned'				
+			# 'aligned' status makes the robot come back to the marked point:
+			elif status == 'aligned' and abs(bot.goal_angle - bot.odom_yaw) > 0.1:
+				status = 'comeback'
+			elif status == 'aligned' and bot.goal_distance > 0.1 and (bot.goal_angle - bot.odom_yaw) > 0.1:
+				bot.linear_x = -0.1
+				bot.angular_z = 0.1
+				print("Correting trajectory")
+			elif status == 'aligned' and bot.goal_distance > 0.1 and (bot.goal_angle - bot.odom_yaw) < -0.1:
+				bot.linear_x = -0.1
+				bot.angular_z = -0.1
+				print("Correcting trajectory 2")
+			elif status == 'aligned' and bot.goal_distance > 0.1 and (bot.goal_angle - bot.odom_yaw) < 0.1 and (bot.goal_angle - bot.odom_yaw) > -0.1:
+				bot.linear_x = -0.1
+				bot.angular_z = 0.0
+				print("Trajectory correct")		
+			elif status == 'aligned' and bot.goal_distance <= 0.1:
+				# implement a alignment from the previous state
+				bot.linear_x = 0.0
+				bot.angular_z = 0.0
+				print("Goal reached")
+				status = 'run'
+
+			# Any other status:
 			else:
 				bot.angular_z = 0.1
 				bot.linear_x = 0
 			velocidade_saida.publish(bot.main_twist())
-			#rospy.sleep(0.5)
+			rate.sleep()
+
 			if export_frame is not None:
 				visor.display_frame('frame', export_frame)
 
@@ -235,6 +290,11 @@ if __name__=="__main__":
 			if  key_input == ord('q'):
 				velocidade_saida.publish(bot.stop_twist())
 				break
+			if key_input == ord('r'):
+				status = 'comeback'
+			if key_input == ord('s'):
+				status = 'odom_save'
+
 	except rospy.ROSInterruptException:
 		print("Ocorreu uma exceção com o rospy")
 		velocidade_saida.publish(bot.stop_twist())

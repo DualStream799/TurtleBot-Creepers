@@ -231,7 +231,7 @@ if __name__=="__main__":
 	tfl = tf2_ros.TransformListener(tf_buffer) # Para fazer conversao de sistemas de coordenadas - usado para calcular angulo
 
 	try:
-		 #Loop principal - todo programa ROS deve ter um
+		 #Loop principal
 		while not rospy.is_shutdown():
 			# 'run' status keeps the robot on track:
 			if status == 'run' and track_contour_point is not None and screen_point is not None and export_frame is not None:
@@ -241,19 +241,18 @@ if __name__=="__main__":
 					bot.angular_z = 0.1
 				bot.linear_x = 0.1
 			# 'comeback' status makes the robot align with the initial point:
-			elif status == 'comeback' and abs(bot.goal_angle - bot.odom_yaw) > 0.1:
+			elif status == 'comeback' and (abs(bot.goal_angle) + abs(bot.odom_yaw) - math.pi) > 0.1:
 					bot.linear_x = 0.0
 					bot.angular_z = 0.1
 					print('Aligning with goal: {}'.format(abs(bot.goal_angle - bot.odom_yaw)))
+					print("Goal:{}    &   Odom: {}".format(bot.goal_angle, bot.odom_yaw))
 
-			elif status == 'comeback' and abs(bot.goal_angle - bot.odom_yaw) <= 0.1:
+			elif status == 'comeback' and (abs(bot.goal_angle) + abs(bot.odom_yaw) - math.pi) <= 0.1:
 				velocidade_saida.publish(bot.stop_twist())
 				rospy.sleep(3)
 				print("Aligned")
-				status = 'aligned'				
+				#status = 'aligned'				
 			# 'aligned' status makes the robot come back to the marked point:
-			elif status == 'aligned' and abs(bot.goal_angle - bot.odom_yaw) > 0.1:
-				status = 'comeback'
 			elif status == 'aligned' and bot.goal_distance > 0.1 and (bot.goal_angle - bot.odom_yaw) > 0.1:
 				bot.linear_x = -0.1
 				bot.angular_z = 0.1

@@ -14,6 +14,7 @@ from tf import transformations
 from tf import TransformerROS
 from numpy import linalg
 import numpy as np
+import argparse
 import tf2_ros
 import rospy
 import math
@@ -24,40 +25,39 @@ import sys
 
 # Importing custom libraries:
 from ROS_OpenCV_Pythonlib.bot_module import ControlBotModule, VisionBotModule, SupportBotModule
-
+bot = ControlBotModule()
+visor = VisionBotModule()
+tf_buffer = tf2_ros.Buffer()
+# Empty variables:
 x = 0
 y = 0
-z = 0 
+z = 0
 id = 0
+tfl = 0
 image = None
-marcadores = []
-angulo_marcador_robo = 0
-
 status = 'run'
 diff_pos = []
 diff_ori = []
+aligned = False
+marcadores = []
+first_time = True
+find_track = None
 export_frame = None
-track_contour_point = None
 screen_point = None
+mobilenet_detect = False
+angulo_marcador_robo = 0
+track_contour_point = None
 # Hue value for masks:
 yellow_hue = 60
 green_hue = 123
 blue_hue = 207
 pink_hue = 309
 
-first_time = True
-aligned = False
-find_track = False
-
-bot = ControlBotModule()
-visor = VisionBotModule()
+creeper_selector = input("Available creeper colors:\n- Green\n- Blue\n- Pink\nSelect Creeper color: ")
 
 frame = "camera_link"
 # frame = "head_camera"  # DESCOMENTE para usar com webcam USB via roslaunch tag_tracking usbcam
 
-tfl = 0
-
-tf_buffer = tf2_ros.Buffer()
 
 def recebe(msg):
 	global x # O global impede a recriacao de uma variavel local, para podermos usar o x global ja'  declarado
@@ -131,7 +131,7 @@ def on_frame(image):
 	# Converts image to proper format:
 	frame = bot.convert_compressed_to_cv2(image)
 	# Resizes the frame to fit on the screen:
-	frame = cv2.resize(frame, (frame.shape[1]/2, frame.shape[0]/2))
+	#frame = cv2.resize(frame, (frame.shape[1]/2, frame.shape[0]/2))
 	screen_point = frame.shape
 	# Converts frame to all spacecolors:
 	bgr_frame, gray_frame, rgb_frame, hsv_frame = visor.frame_spacecolors(frame)
@@ -152,8 +152,9 @@ def on_frame(image):
 	pink_contours, tree = visor.contour_detection(pink_mask_clean)
 	# Finds the closes creeper selecting the biggest contour between all 3 masks (green, blue and pink):
 	biggest_contours = []
+
 	# Draws the green contour and the center of it:
-	if len(green_contours) != 0:
+	if len(green_contours) != 0 and creeper_selector == 'green':
 		# Finds the biggest green contour:
 		green_biggest_contour = visor.contour_biggest_area(green_contours)
 		# Avoids a noise detection to be categorized as a contour:
@@ -164,8 +165,9 @@ def on_frame(image):
 			green_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
 			visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(13, 253, 0))
 			visor.draw_text(bgr_frame, "Green", green_text_point, thickness=1, font_size=0.5, text_color=(13, 253, 0))
+
 	# Draws the blue contour and the center of it:
-	if len(blue_contours) != 0:
+	if len(blue_contours) != 0 and creeper_selector == 'blue':
 		# Finds the biggest blue contour:
 		blue_biggest_contour = visor.contour_biggest_area(blue_contours)
 		# Avoids a noise detection to be categorized as a contour:
@@ -176,8 +178,9 @@ def on_frame(image):
 			blue_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
 			visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(255, 145, 17))
 			visor.draw_text(bgr_frame, "Blue", blue_text_point, thickness=1, font_size=0.5, text_color=(255, 145, 17))
+
 	# Draws the pink contour and the center of it:
-	if len(pink_contours) != 0:
+	if len(pink_contours) != 0 and creeper_selector == 'pink':
 		# Finds the biggest pink contour:
 		pink_biggest_contour = visor.contour_biggest_area(pink_contours)
 		# Avoids a noise detection to be categorized as a contour:
@@ -188,21 +191,23 @@ def on_frame(image):
 			pink_text_point = visor.convert_dimensions_to_points((x, y-15, w, h))[0]
 			visor.draw_rectangle(bgr_frame, (x, y, w, h), color=(216, 0, 255))
 			visor.draw_text(bgr_frame, "Pink", pink_text_point, thickness=1, font_size=0.5, text_color=(216, 0, 255))
+
 	# Draws the yellow contour and the center of it:
-	if len(yellow_contours) != 0:
+	if len(yellow_contours) != 0 and status != 'creeper_close':
 		# Finds the biggest contour:
 		yellow_biggest_contour = visor.contour_biggest_area(yellow_contours)
 		# Avoids a noise detection to be categorized as a contour:
 		if visor.contour_features(yellow_biggest_contour, mode='area') > 1000:
 			track_contour_point = visor.contour_features(yellow_biggest_contour, 'center')
 			# Draws a aim on the center of the biggest contour:
-			visor.draw_aim(bgr_frame, track_contour_point)
+			visor.draw_aim(bgr_frame, track_contour_point, color=(0,0,0))
 			# Draws the contour:
 			visor.contour_draw(bgr_frame, yellow_biggest_contour, color=(0,0,0))
-
-			find_track = False 
+			if status == 'comeback':
+				find_track = False 
 		else:
-			find_track = True
+			if status == 'comeback':
+				find_track = True
 		
 	# Check if creeper is near to aim it:
 	closest_creeper = []
@@ -219,8 +224,18 @@ def on_frame(image):
 		track_contour_point = (int(x+w/2), int(y+h/2))
 		if (status == 'run' or status == 'aligned'):
 			status = 'creeper_close'
-		
-	# Display current frame:
+	
+	# # Makes a copy of the captured frame and makes detection:
+	# mobilenet_frame, detection_data = mobilenet_detect(bgr_frame.copy())
+	# # displays data from the detecion:
+	
+	
+	# # Display current frame:
+	# if mobilenet_display == True:
+	# 	# ("CLASS", confidence, (x1, y1, x2, y3))
+	# 	print(detection_data)
+	# 	export_frame = mobilenet_frame
+	# else:
 	export_frame = bgr_frame
 
 def odometry_position(msg):
@@ -238,7 +253,6 @@ def odometry_position(msg):
 def laser_scanner(data):
 	bot.laser_scan(data)
 
-
 if __name__=="__main__":
 
 	rospy.init_node("marcador")
@@ -249,29 +263,31 @@ if __name__=="__main__":
 	robo_camera = rospy.Subscriber('/camera/rgb/image_raw/compressed', CompressedImage, on_frame, queue_size=4, buff_size=2**24)
 	obodmetry_sub = rospy.Subscriber('/odom', Odometry, odometry_position)
 	recebe_scan = rospy.Subscriber("/scan", LaserScan, laser_scanner)
-
 	tfl = tf2_ros.TransformListener(tf_buffer) # Para fazer conversao de sistemas de coordenadas - usado para calcular angulo
 
 	try:
 		#Loop principal
 		while not rospy.is_shutdown():
+			if creeper_selector not in ['blue', 'green', 'pink']:
+				print('Invalid creeper color')
+				break
 			# 'run' status keeps the robot on track:
 			if status == 'run' and track_contour_point is not None and screen_point is not None and export_frame is not None:
-				if (track_contour_point[0] >= screen_point[0]):
+				if track_contour_point[0] >= screen_point[1]/2:
 					bot.angular_z = -0.1
 				else:
 					bot.angular_z = 0.1
 				bot.linear_x = 0.1
 				print("On the track")
 			# 'creeper_close' status makes the creeper ignore the track and go toward the closest creeper until a certain distance:
-			elif status == 'creeper_close' and bot.ahead_first >= 1.50:
-				if track_contour_point[0] >= screen_point[0]:
+			elif status == 'creeper_close' and bot.ahead_first >= 0.3:
+				if track_contour_point[0] >= screen_point[1]/2:
 					bot.angular_z = -0.1
 				else:
 					bot.angular_z = 0.1
 				bot.linear_x = 0.1
 				print("Approaching creeper")
-			elif status == 'creeper_close' and bot.ahead_first < 1.50:
+			elif status == 'creeper_close' and bot.ahead_first < 0.3:
 				bot.linear_x = 0.0
 				bot.angular_z = 0.0
 				status == 'grab'
@@ -284,11 +300,11 @@ if __name__=="__main__":
 			elif status == 'comeback' and find_track == True:
 					bot.linear_x = 0.0
 					bot.angular_z = 0.1
-					print('Aligning with goal')
+					print('Looking or the track')
 			elif status == 'comeback' and find_track == False:
 				bot.linear_x = 0.0
 				bot.angular_z = 0.0
-				print("Aligned")
+				print("Track found")
 				status = 'run'
 			# # 'aligned' status makes the robot come back to the marked point:
 			# elif status == 'aligned' and bot.goal_distance > 0.1 and (bot.goal_angle - bot.odom_yaw) > 0.1:
